@@ -1,0 +1,43 @@
+# Scratch verification of the trace-selection branches; not for upstream.
+name: verify-trace
+on:
+  push:
+    branches: [verify-trace]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: repo
+jobs:
+  verify:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    env:
+      CI_OS_NAME: linux
+      CCACHE_DISABLE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          path: repo
+          fetch-depth: 0
+      - run: git fetch origin '+refs/scratch/trace/*:refs/remotes/scratch/*'
+      - uses: ./repo/.github/actions/install-deps
+        with:
+          stage: build
+      - uses: ./repo/.github/actions/install-deps
+        with:
+          stage: test
+      - uses: ./repo/.github/actions/install-deps
+        with:
+          stage: format
+      - uses: ./repo/.github/actions/setup-venv
+        with:
+          save: false
+      - run: ./ci/ci-build.bash --prefix "$GITHUB_WORKSPACE/install" --compiler gcc
+      - run: bash ci/verify-trace.bash "$GITHUB_WORKSPACE/results"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: results
