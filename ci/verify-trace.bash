@@ -17,7 +17,8 @@ for b in mask event exact; do
   tests=$(git diff --name-only "$MASTER" "$ref" -- 'test_regress/t/t_*.py' | sed 's|^test_regress/||')
   mkdir -p "$OUT/$b"
   drv --golden $tests > "$OUT/$b/golden.log" 2>&1
-  cp test_regress/t/t_trace_dumpvars_*.out "$OUT/$b/" 2>/dev/null
+  echo "$b golden changes vs branch: $(git status --porcelain -- test_regress/t | grep "\.out$" | tr "\n" " ")"
+  cp test_regress/t/t_trace_dumpvars_{sparse,event,exact}_*.out "$OUT/$b/" 2>/dev/null
   if drv $tests > "$OUT/$b/fixed.log" 2>&1; then echo "$b fixed: PASS"; else echo "$b fixed: FAIL"; status=1; fi
   if [ "$b" != exact ]; then
     git checkout -q "$MASTER" -- include
@@ -28,10 +29,10 @@ for b in mask event exact; do
   git reset -q --hard "$BASE"; git clean -fdq test_regress
 done
 git -c user.name=ci -c user.email=ci@example.com merge -q --no-edit scratch/mask scratch/event scratch/exact || status=1
-for b in mask event exact; do cp "$OUT/$b"/*.out test_regress/t/; done
+cp "$OUT"/mask/*.out test_regress/t/
 if drv $(cd test_regress && ls t/t_trace_*.py) > "$OUT/all-trace.log" 2>&1; then echo "all t_trace_*: PASS"
 else echo "all t_trace_*: FAIL"; status=1; fi
 tail -5 "$OUT/all-trace.log"
 make -j 4 format CLANGFORMAT=clang-format-21 > "$OUT/format.log" 2>&1 || echo "format: rc $?"
-git diff > "$OUT/format.diff"; echo "format diff lines: $(wc -l < "$OUT/format.diff")"
+git diff -- . ":!.github" > "$OUT/format.diff"; echo "format diff lines: $(wc -l < "$OUT/format.diff")"
 exit $status
