@@ -31,10 +31,10 @@ jobs:
       - uses: ./repo/.github/actions/install-deps
         with:
           stage: format
+      - run: ./ci/ci-build.bash --prefix "$GITHUB_WORKSPACE/install" --compiler gcc
       - uses: ./repo/.github/actions/setup-venv
         with:
           save: false
-      - run: ./ci/ci-build.bash --prefix "$GITHUB_WORKSPACE/install" --compiler gcc
       - run: bash ci/verify-trace.bash "$GITHUB_WORKSPACE/results"
       - if: always()
         uses: actions/upload-artifact@v4
