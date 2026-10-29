@@ -11,7 +11,6 @@ BASE=$(git merge-base HEAD "$REF")
 status=0
 drv() { (cd test_regress && ./driver.py -j 0 "$@"); }
 git checkout -q "$REF" -- .
-git rm -q --cached -r . >/dev/null; git reset -q; git checkout -q "$REF" -- .
 git clean -fdq test_regress/t
 git diff --name-only "$BASE" "$REF" -- test_regress | sed 's/^/changed: /'
 tests=$(cd test_regress && ls t/t_trace_dumpvars_dyn_*.py)
@@ -28,7 +27,8 @@ cp "$OUT/fixed_imp.h" include/verilated_trace_imp.h
 if drv $(cd test_regress && ls t/t_trace_*.py) > "$OUT/all-trace.log" 2>&1; then echo "all t_trace_*: PASS"
 else echo "all t_trace_*: FAIL"; status=1; fi
 grep '==SUMMARY' "$OUT/all-trace.log" | tail -1
+git add -A
 make -j 4 format CLANGFORMAT=clang-format-21 > "$OUT/format.log" 2>&1 || echo "format: rc $?"
-git diff -- . ':!.github' ':!ci/verify-trace.bash' ':!test_regress/t/*.out' > "$OUT/format.diff"
+git diff > "$OUT/format.diff"
 echo "format diff lines: $(wc -l < "$OUT/format.diff")"
 exit $status
