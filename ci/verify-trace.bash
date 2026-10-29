@@ -1,38 +1,34 @@
 #!/usr/bin/env bash
-# For each branch: golden files with the fix, a rerun that must pass, and
-# (for the bug fixes) a run on the unfixed runtime that must fail. Then all
-# trace tests with every branch merged, and 'make format' on the merge.
+# Event review rework: goldens with the fix, rerun must pass, unfixed
+# runtime must fail; then all trace tests and 'make format'.
 set -uo pipefail
 OUT=$1
 mkdir -p "$OUT"
 source .venv/bin/activate 2>/dev/null || true
 export VERILATOR_TEST_NO_CONTRIBUTORS=1 VERILATOR_TEST_NO_LINT_PY=1
-BASE=$(git rev-parse HEAD)
-MASTER=$(git merge-base HEAD scratch/mask)
+REF=scratch/event
+BASE=$(git merge-base HEAD "$REF")
 status=0
 drv() { (cd test_regress && ./driver.py -j 0 "$@"); }
-for b in mask event exact; do
-  ref=scratch/$b
-  git checkout -q "$ref" -- $(git diff --name-only "$MASTER" "$ref")
-  tests=$(git diff --name-only "$MASTER" "$ref" -- 'test_regress/t/t_*.py' | sed 's|^test_regress/||')
-  mkdir -p "$OUT/$b"
-  drv --golden $tests > "$OUT/$b/golden.log" 2>&1
-  echo "$b golden changes vs branch: $(git status --porcelain -- test_regress/t | grep "\.out$" | tr "\n" " ")"
-  cp test_regress/t/t_trace_dumpvars_{sparse,event,exact}_*.out "$OUT/$b/" 2>/dev/null
-  if drv $tests > "$OUT/$b/fixed.log" 2>&1; then echo "$b fixed: PASS"; else echo "$b fixed: FAIL"; status=1; fi
-  if [ "$b" != exact ]; then
-    git checkout -q "$MASTER" -- include
-    if drv $tests > "$OUT/$b/unfixed.log" 2>&1; then echo "$b unfixed: PASS (expected FAIL)"; status=1
-    else echo "$b unfixed: FAIL (expected)"; fi
-    grep -h -E '%Error|Assertion|error:|Abort|differ|mismatch' "$OUT/$b/unfixed.log" | head -20
-  fi
-  git reset -q --hard "$BASE"; git clean -fdq test_regress
-done
-git -c user.name=ci -c user.email=ci@example.com merge -q --no-edit scratch/mask scratch/event scratch/exact || status=1
-cp "$OUT"/mask/*.out test_regress/t/
+git checkout -q "$REF" -- .
+git rm -q --cached -r . >/dev/null; git reset -q; git checkout -q "$REF" -- .
+git clean -fdq test_regress/t
+git diff --name-only "$BASE" "$REF" -- test_regress | sed 's/^/changed: /'
+tests=$(cd test_regress && ls t/t_trace_dumpvars_dyn_*.py)
+drv --golden $tests > "$OUT/golden.log" 2>&1
+echo "golden changes: $(git status --porcelain -- test_regress/t | grep '\.out$' | tr '\n' ' ')"
+mkdir -p "$OUT/goldens"; cp test_regress/t/t_trace_dumpvars_dyn_*.out "$OUT/goldens/"
+if drv $tests > "$OUT/fixed.log" 2>&1; then echo "fixed: PASS"; else echo "fixed: FAIL"; status=1; fi
+cp include/verilated_trace_imp.h "$OUT/fixed_imp.h"
+git show "$BASE":include/verilated_trace_imp.h > include/verilated_trace_imp.h
+if drv $tests > "$OUT/unfixed.log" 2>&1; then echo "unfixed: PASS (expected FAIL)"; status=1
+else echo "unfixed: FAIL (expected)"; fi
+grep -h -E 'Assertion|FAILED' "$OUT/unfixed.log" | sort -u | head
+cp "$OUT/fixed_imp.h" include/verilated_trace_imp.h
 if drv $(cd test_regress && ls t/t_trace_*.py) > "$OUT/all-trace.log" 2>&1; then echo "all t_trace_*: PASS"
 else echo "all t_trace_*: FAIL"; status=1; fi
-tail -5 "$OUT/all-trace.log"
+grep '==SUMMARY' "$OUT/all-trace.log" | tail -1
 make -j 4 format CLANGFORMAT=clang-format-21 > "$OUT/format.log" 2>&1 || echo "format: rc $?"
-git diff -- . ":!.github" > "$OUT/format.diff"; echo "format diff lines: $(wc -l < "$OUT/format.diff")"
+git diff -- . ':!.github' ':!ci/verify-trace.bash' ':!test_regress/t/*.out' > "$OUT/format.diff"
+echo "format diff lines: $(wc -l < "$OUT/format.diff")"
 exit $status
