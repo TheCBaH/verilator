@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# $dumpvars scope arguments: goldens for the new tests, rerun, all trace
-# and $dumpvars tests, then 'make format'.
+# $dumpvars scope arguments: new tests against committed goldens, all
+# trace and $dumpvars tests, then 'make format'.
 set -uo pipefail
 OUT=$1
 mkdir -p "$OUT"
@@ -10,9 +10,6 @@ status=0
 drv() { (cd test_regress && ./driver.py -j 0 "$@"); }
 git log --oneline -3
 new=$(cd test_regress && ls t/t_trace_dumpvars_scope_*.py)
-drv --golden $new > "$OUT/golden.log" 2>&1
-mkdir -p "$OUT/goldens"; cp test_regress/t/t_trace_dumpvars_scope_*.out "$OUT/goldens/" 2>/dev/null
-cp -r test_regress/obj_vlt/t_trace_dumpvars_scope_vcd "$OUT/obj_vcd" 2>/dev/null
 if drv $new > "$OUT/scope.log" 2>&1; then echo "scope: PASS"; else echo "scope: FAIL"; status=1; fi
 grep -h -E '%Error|%Warning|FAILED' "$OUT/scope.log" | sort -u | head -20
 users=$(cd test_regress && grep -l -E '\$dump(vars|ports)' t/*.v | sed 's/\.v$/*.py/' | xargs -n1 sh -c 'ls $0 2>/dev/null' | grep -v '_scope_')
