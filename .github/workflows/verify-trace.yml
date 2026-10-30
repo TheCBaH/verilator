@@ -22,6 +22,10 @@ jobs:
           path: repo
           fetch-depth: 0
       - run: git fetch origin '+refs/scratch/trace/*:refs/remotes/scratch/*'
+      # Build and test the scratch tree, with this branch's script
+      - run: |
+          cp ci/verify-trace.bash "$RUNNER_TEMP/"
+          git checkout -q --detach scratch/dumpvars
       - uses: ./repo/.github/actions/install-deps
         with:
           stage: build
@@ -35,7 +39,7 @@ jobs:
       - uses: ./repo/.github/actions/setup-venv
         with:
           save: false
-      - run: bash ci/verify-trace.bash "$GITHUB_WORKSPACE/results"
+      - run: bash "$RUNNER_TEMP/verify-trace.bash" "$GITHUB_WORKSPACE/results"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
